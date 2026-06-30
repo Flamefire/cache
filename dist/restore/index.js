@@ -94498,7 +94498,9 @@ function restoreCacheV2(paths_1, primaryKey_1, restoreKeys_1, options_1) {
                 info('Lookup only - skipping download');
                 return response.matchedKey;
             }
+            info(`Get path`);
             archivePath = external_path_.join(yield createTempDirectory(), getCacheFileName(compressionMethod));
+            info(`Got path`);
             core_debug(`Archive path: ${archivePath}`);
             core_debug(`Starting download of archive to: ${archivePath}`);
             yield downloadCache(response.signedDownloadUrl, archivePath, options);
