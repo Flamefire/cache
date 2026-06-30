@@ -92600,15 +92600,19 @@ function downloadCacheHttpClient(archiveLocation, archivePath) {
     return downloadUtils_awaiter(this, void 0, void 0, function* () {
         const writeStream = external_fs_namespaceObject.createWriteStream(archivePath);
         const httpClient = new lib_HttpClient('actions/cache');
+        core_debug('Start downloadCacheHttpClient');
         const downloadResponse = yield requestUtils_retryHttpClientResponse('downloadCache', () => downloadUtils_awaiter(this, void 0, void 0, function* () { return httpClient.get(archiveLocation); }));
         // Abort download if no traffic received over the socket.
         downloadResponse.message.socket.setTimeout(SocketTimeout, () => {
             downloadResponse.message.destroy();
             core_debug(`Aborting download, socket timed out after ${SocketTimeout} ms`);
         });
+        core_debug('Start dl downloadCacheHttpClient');
         yield pipeResponseToStream(downloadResponse, writeStream);
+        core_debug('Start check downloadCacheHttpClient');
         // Validate download size.
         const contentLengthHeader = downloadResponse.message.headers['content-length'];
+        core_debug(`Content len ${contentLengthHeader}`);
         if (contentLengthHeader) {
             const expectedLength = parseInt(contentLengthHeader);
             const actualLength = getArchiveFileSizeInBytes(archivePath);
@@ -92636,6 +92640,7 @@ function downloadCacheHttpClientConcurrent(archiveLocation, archivePath, options
             keepAlive: true
         });
         try {
+            core_debug('Start downloadCacheHttpClientConcurrent');
             const res = yield requestUtils_retryHttpClientResponse('downloadCacheMetadata', () => downloadUtils_awaiter(this, void 0, void 0, function* () { return yield httpClient.request('HEAD', archiveLocation, null, {}); }));
             const lengthHeader = res.message.headers['content-length'];
             if (lengthHeader === undefined || lengthHeader === null) {
@@ -92647,6 +92652,7 @@ function downloadCacheHttpClientConcurrent(archiveLocation, archivePath, options
             }
             const downloads = [];
             const blockSize = 4 * 1024 * 1024;
+            core_debug('Start dl downloadCacheHttpClientConcurrent');
             for (let offset = 0; offset < length; offset += blockSize) {
                 const count = Math.min(blockSize, length - offset);
                 downloads.push({
@@ -92685,6 +92691,7 @@ function downloadCacheHttpClientConcurrent(archiveLocation, archivePath, options
             }
         }
         finally {
+            core_debug('end downloadCacheHttpClientConcurrent');
             httpClient.dispose();
             yield archiveDescriptor.close();
         }
@@ -92756,6 +92763,7 @@ function downloadCacheStorageSDK(archiveLocation, archivePath, options) {
             yield downloadCacheHttpClient(archiveLocation, archivePath);
         }
         else {
+            core_debug('Start dl in downloadCacheStorageSDK');
             // Use downloadToBuffer for faster downloads, since internally it splits the
             // file into 4 MB chunks which can then be parallelized and retried independently
             //
@@ -92779,6 +92787,7 @@ function downloadCacheStorageSDK(archiveLocation, archivePath, options) {
                         concurrency: options.downloadConcurrency,
                         onProgress: downloadProgress.onProgress()
                     }));
+                    core_debug(`result=${result}`);
                     if (result === 'timeout') {
                         controller.abort();
                         throw new Error('Aborting cache download as the download time exceeded the timeout.');
@@ -92789,6 +92798,7 @@ function downloadCacheStorageSDK(archiveLocation, archivePath, options) {
                 }
             }
             finally {
+                core_debug('End dl in downloadCacheStorageSDK');
                 downloadProgress.stopDisplayTimer();
                 external_fs_namespaceObject.closeSync(fd);
             }
@@ -93035,6 +93045,7 @@ function downloadCache(archiveLocation, archivePath, options) {
     return cacheHttpClient_awaiter(this, void 0, void 0, function* () {
         const archiveUrl = new external_url_.URL(archiveLocation);
         const downloadOptions = getDownloadOptions(options);
+        core_debug(`archiveUrl=${archiveUrl} -- ${archiveUrl.hostname} `);
         if (archiveUrl.hostname.endsWith('.blob.core.windows.net')) {
             if (downloadOptions.useAzureSdk) {
                 // Use Azure storage SDK to download caches hosted on Azure to improve speed and reliability.
@@ -94408,6 +94419,8 @@ function restoreCacheV1(paths_1, primaryKey_1, restoreKeys_1, options_1) {
             }
             archivePath = external_path_.join(yield createTempDirectory(), getCacheFileName(compressionMethod));
             core_debug(`Archive Path: ${archivePath}`);
+            core_debug('Cacheentry:');
+            core_debug(JSON.stringify(cacheEntry));
             // Download the cache from the cache entry
             yield downloadCache(cacheEntry.archiveLocation, archivePath, options);
             if (isDebug()) {
