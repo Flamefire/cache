@@ -87534,12 +87534,14 @@ class BlockBlobClient extends Clients_BlobClient {
     // Legacy, no fix for eslint error without breaking. Disable it for this interface.
     /* eslint-disable-next-line @azure/azure-sdk/ts-naming-options*/
     options) {
+        core_debug('Start BlockBlobClient ctor');
         // In TypeScript we cannot simply pass all parameters to super() like below so have to duplicate the code instead.
         //   super(s, credentialOrPipelineOrContainerNameOrOptions, blobNameOrOptions, options);
         let pipeline;
         let url;
         options = options || {};
         if (isPipelineLike(credentialOrPipelineOrContainerName)) {
+        core_debug('isPipelineLike BlockBlobClient ctor');
             // (url: string, pipeline: Pipeline)
             url = urlOrConnectionString;
             pipeline = credentialOrPipelineOrContainerName;
@@ -87548,6 +87550,7 @@ class BlockBlobClient extends Clients_BlobClient {
         else if ((esm_isNodeLike && credentialOrPipelineOrContainerName instanceof StorageSharedKeyCredential) ||
             credentialOrPipelineOrContainerName instanceof AnonymousCredential ||
             isTokenCredential(credentialOrPipelineOrContainerName)) {
+        core_debug('esm_isNodeLike BlockBlobClient ctor');
             // (url: string, credential?: StorageSharedKeyCredential | AnonymousCredential | TokenCredential, options?: StoragePipelineOptions)
             url = urlOrConnectionString;
             options = blobNameOrOptions;
@@ -87555,6 +87558,7 @@ class BlockBlobClient extends Clients_BlobClient {
         }
         else if (!credentialOrPipelineOrContainerName &&
             typeof credentialOrPipelineOrContainerName !== "string") {
+        core_debug('credentialOrPipelineOrContainerName1 BlockBlobClient ctor');
             // (url: string, credential?: StorageSharedKeyCredential | AnonymousCredential | TokenCredential, options?: StoragePipelineOptions)
             // The second parameter is undefined. Use anonymous credential.
             url = urlOrConnectionString;
@@ -87567,6 +87571,7 @@ class BlockBlobClient extends Clients_BlobClient {
             typeof credentialOrPipelineOrContainerName === "string" &&
             blobNameOrOptions &&
             typeof blobNameOrOptions === "string") {
+        core_debug('credentialOrPipelineOrContainerName2 BlockBlobClient ctor');
             // (connectionString: string, containerName: string, blobName: string, options?: StoragePipelineOptions)
             const containerName = credentialOrPipelineOrContainerName;
             const blobName = blobNameOrOptions;
@@ -87596,12 +87601,15 @@ class BlockBlobClient extends Clients_BlobClient {
             }
         }
         else {
+        core_debug('error BlockBlobClient ctor');
             throw new Error("Expecting non-empty strings for containerName and blobName parameters");
         }
+        core_debug('super BlockBlobClient ctor');
         super(url, pipeline);
         this.blockBlobContext = this.storageClientContext.blockBlob;
         this._blobContext = this.storageClientContext.blob;
         this.blobClientConfig = options;
+        core_debug('End BlockBlobClient ctor');
     }
     /**
      * Creates a new BlockBlobClient object identical to the source but with the
@@ -92746,6 +92754,7 @@ function downloadSegment(httpClient, archiveLocation, offset, count) {
  */
 function downloadCacheStorageSDK(archiveLocation, archivePath, options) {
     return downloadUtils_awaiter(this, void 0, void 0, function* () {
+        core_debug('Start downloadCacheStorageSDK');
         var _a;
         const client = new BlockBlobClient(archiveLocation, undefined, {
             retryOptions: {
@@ -92754,8 +92763,11 @@ function downloadCacheStorageSDK(archiveLocation, archivePath, options) {
                 tryTimeoutInMs: options.timeoutInMs
             }
         });
+        core_debug('Client created');
         const properties = yield client.getProperties();
+        core_debug('Properties: '); core_debug(JSON.stringify(properties));
         const contentLength = (_a = properties.contentLength) !== null && _a !== void 0 ? _a : -1;
+        core_debug(`Content length: ${contentLength}`);
         if (contentLength < 0) {
             // We should never hit this condition, but just in case fall back to downloading the
             // file as one large stream
@@ -92802,6 +92814,8 @@ function downloadCacheStorageSDK(archiveLocation, archivePath, options) {
                 downloadProgress.stopDisplayTimer();
                 external_fs_namespaceObject.closeSync(fd);
             }
+                            core_debug('done dl in downloadCacheStorageSDK');
+
         }
     });
 }
@@ -93049,6 +93063,7 @@ function downloadCache(archiveLocation, archivePath, options) {
         if (archiveUrl.hostname.endsWith('.blob.core.windows.net')) {
             if (downloadOptions.useAzureSdk) {
                 // Use Azure storage SDK to download caches hosted on Azure to improve speed and reliability.
+                core_debug('using downloadCacheStorageSDK');
                 yield downloadCacheStorageSDK(archiveLocation, archivePath, downloadOptions);
             }
             else if (downloadOptions.concurrentBlobDownloads) {
@@ -94979,6 +94994,7 @@ async function restoreImpl(stateProvider, earlyExit) {
         return cacheKey;
     }
     catch (error) {
+        core_debug(`Error restoring cache: ${error}`);
         setFailed(error.message);
         if (earlyExit) {
             process.exit(1);
