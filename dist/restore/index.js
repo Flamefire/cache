@@ -47942,13 +47942,19 @@ function createTracingClient(options) {
         };
     }
     async function withSpan(name, operationOptions, callback, spanOptions) {
+        core_debug('withSpan1');
         const { span, updatedOptions } = startSpan(name, operationOptions, spanOptions);
+        core_debug('withSpan2');
         try {
+        core_debug('withSpan3');
             const result = await withContext(updatedOptions.tracingOptions.tracingContext, () => Promise.resolve(callback(updatedOptions, span)));
+        core_debug('withSpan4');
             span.setStatus({ status: "success" });
+        core_debug('withSpan5');
             return result;
         }
         catch (err) {
+        core_debug('withSpanerror');
             span.setStatus({ status: "error", error: err });
             throw err;
         }
@@ -80467,6 +80473,8 @@ function toQuerySerialization(textConfiguration) {
     }
 }
 function parseObjectReplicationRecord(objectReplicationRecord) {
+    core_debug('parseObjectReplicationRecord');
+
     if (!objectReplicationRecord) {
         return undefined;
     }
@@ -80497,6 +80505,7 @@ function parseObjectReplicationRecord(objectReplicationRecord) {
             });
         }
     }
+    core_debug('ret parseObjectReplicationRecord');
     return orProperties;
 }
 /**
@@ -86442,8 +86451,11 @@ class Clients_BlobClient extends StorageClient_StorageClient {
      * @param options - Optional options to Get Properties operation.
      */
     async getProperties(options = {}) {
+        core_debug('getProperties1');
         options.conditions = options.conditions || {};
+        core_debug('getProperties2');
         ensureCpkIfSpecified(options.customerProvidedKey, this.isHttps);
+        core_debug('getProperties3');
         return tracingClient.withSpan("BlobClient-getProperties", options, async (updatedOptions) => {
             const res = utils_common_assertResponse(await this.blobContext.getProperties({
                 abortSignal: options.abortSignal,
@@ -86455,6 +86467,7 @@ class Clients_BlobClient extends StorageClient_StorageClient {
                 cpkInfo: options.customerProvidedKey,
                 tracingOptions: updatedOptions.tracingOptions,
             }));
+            core_debug('getProperties4')
             return {
                 ...res,
                 _response: res._response, // _response is made non-enumerable
