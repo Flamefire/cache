@@ -44690,7 +44690,9 @@ class NodeHttpClient {
                 }
                 body = uploadReportStream;
             }
+            core_debug('bef makeRequest');
             const res = await this.makeRequest(request, abortController, body);
+            core_debug('aft makeRequest');
             if (timeoutId !== undefined) {
                 clearTimeout(timeoutId);
             }
@@ -44770,8 +44772,11 @@ class NodeHttpClient {
             headers: request.headers.toJSON({ preserveCase: true }),
             ...request.requestOverrides,
         };
+        core_debug('makeRequest');
         return new Promise((resolve, reject) => {
+            core_debug(`makeRequest sec=${isInsecure}`);
             const req = isInsecure ? external_node_http_.request(options, resolve) : external_node_https_namespaceObject.request(options, resolve);
+            core_debug('after request');
             req.once("error", (err) => {
                 reject(new restError_RestError(err.message, { code: err.code ?? restError_RestError.REQUEST_SEND_ERROR, request }));
             });
@@ -51096,6 +51101,7 @@ class ServiceClient {
      * @param operationSpec - The OperationSpec to use to populate the httpRequest.
      */
     async sendOperationRequest(operationArguments, operationSpec) {
+        core_debug('sendop1');
         const endpoint = operationSpec.baseUrl || this._endpoint;
         if (!endpoint) {
             throw new Error("If operationSpec.baseUrl is not specified, then the ServiceClient must have a endpoint string property that contains the base URL to use.");
@@ -51103,10 +51109,13 @@ class ServiceClient {
         // Templatized URLs sometimes reference properties on the ServiceClient child class,
         // so we have to pass `this` below in order to search these properties if they're
         // not part of OperationArguments
+        core_debug('sendop2');
         const url = getRequestUrl(endpoint, operationSpec, operationArguments, this);
+        core_debug('sendop3');
         const request = esm_pipelineRequest_createPipelineRequest({
             url,
         });
+        core_debug('sendop4');
         request.method = operationSpec.httpMethod;
         const operationInfo = getOperationRequestInfo(request);
         operationInfo.operationSpec = operationSpec;
@@ -51149,7 +51158,9 @@ class ServiceClient {
             request.streamResponseStatusCodes = getStreamingResponseStatusCodes(operationSpec);
         }
         try {
+            core_debug('sendop5');
             const rawResponse = await this.sendRequest(request);
+            core_debug('sendop6');
             const flatResponse = flattenResponse(rawResponse, operationSpec.responses[rawResponse.status]);
             if (options?.onResponse) {
                 options.onResponse(rawResponse, flatResponse);
