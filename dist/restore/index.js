@@ -44778,6 +44778,19 @@ class NodeHttpClient {
             core_debug(`makeRequest sec=${isInsecure}`);
             const req = isInsecure ? external_node_http_.request(options, resolve) : external_node_https_namespaceObject.request(options, resolve);
             core_debug('after request');
+            req.on('socket', (socket) => {
+                core_debug('socket assigned');
+                socket.on('lookup', (err, addr, family, host) => {
+                    core_debug('DNS resolved: ' + addr);
+                });
+                socket.on('connect', () => {
+                    core_debug('TCP connected');
+                });
+                socket.on('secureConnect', () => {
+                    core_debug('TLS handshake done');
+                });
+            });
+            core_debug('after request setup');
             req.once("error", (err) => {
                 reject(new restError_RestError(err.message, { code: err.code ?? restError_RestError.REQUEST_SEND_ERROR, request }));
             });
