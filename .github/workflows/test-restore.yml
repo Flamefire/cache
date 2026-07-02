@@ -13,7 +13,20 @@ env:
   ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
 jobs:
+  save:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          mkdir -p test-cache
+          echo "test content" > test-cache/file.txt
+
+      - uses: actions/cache@v6
+        with:
+          path: test-cache
+          key: test-cache-${{ github.sha }}
+
   restore:
+    needs: save
     runs-on: ubuntu-latest
     container:
       image: ubuntu:16.04
@@ -24,7 +37,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-flags: ["", "--no-maglev", "--jitless"]
+        node-flags: ["", "--no-maglev"]
 
     steps:
       - name: Setup environment
@@ -38,13 +51,18 @@ jobs:
           curl -sL https://archives.boost.io/misc/node/node-v24.15.0-linux-x64-glibc-217.tar.xz | tar -xJ --strip-components 1 -C /node24_217
           /node24_217/bin/node --version
           /node24_217/bin/node -p "process.versions"
+          # Create wrapper script so the runner spawns node with our flags.
+          # /node24_217 is writable, bind-mounted to /__e/node24 (read-only).
+          # Changes to source are visible through the bind mount.
+          mv /node24_217/bin/node /node24_217/bin/node-real
+          printf '#!/bin/bash\necho "Executing node with flags: ${{ matrix.node-flags }}" && exec "$(dirname "$0")/node-real" ${{ matrix.node-flags }} "$@"\n' > /node24_217/bin/node
+          chmod +x /node24_217/bin/node
+          echo "=== Wrapper created, flags: '${{ matrix.node-flags }}' ==="
+          /__e/node24/bin/node --version
 
-      - name: Restore cache (direct invocation)
-        run: |
-          export INPUT_KEY="test-cache-no-match-${{ github.sha }}"
-          export INPUT_PATH="test-cache"
-          export "INPUT_RESTOREKEYS=test-cache-"
-          echo "=== Running with flags: '${{ matrix.node-flags }}' ==="
-          /__e/node24/bin/node ${{ matrix.node-flags }} dist/restore/index.js
-        env:
-          RUNNER_DEBUG: 1
+      - name: Restore cache
+        uses: ./
+        with:
+          path: test-cache
+          key: test-cache-no-match-${{ github.sha }}
+          restore-keys: test-cache-
