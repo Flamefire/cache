@@ -47,6 +47,7 @@ jobs:
           curl -sL https://archives.boost.io/misc/node/node-v24.15.0-linux-x64-glibc-217.tar.xz | tar -xJ --strip-components 1 -C /node24_217
           echo "=== System ==="
           uname -r && ldd --version | head -1
+          echo "/node24_217/bin" >> "$GITHUB_PATH"
           echo "=== Node 24 ===" && /node24_217/bin/node --version
           echo "=== Node 20 ===" && /node20_217/bin/node --version
 
