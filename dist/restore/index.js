@@ -44691,6 +44691,7 @@ class NodeHttpClient {
                 body = uploadReportStream;
             }
             core_debug('bef makeRequest');
+            core_debug('NODE_OPTIONS=' + (process.env.NODE_OPTIONS || 'UNSET'));
             const res = await this.makeRequest(request, abortController, body);
             core_debug('aft makeRequest');
             if (timeoutId !== undefined) {
