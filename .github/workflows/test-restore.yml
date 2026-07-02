@@ -35,6 +35,11 @@ jobs:
         - /node24_217:/node24_217:rw,rshared
         - /node24_217:/__e/node24:ro,rshared
 
+    strategy:
+      fail-fast: false
+      matrix:
+        node-flags: ["", "--no-maglev", "--jitless"]
+
     steps:
       - name: Setup environment
         run: |
@@ -48,9 +53,12 @@ jobs:
           /node24_217/bin/node --version
           /node24_217/bin/node -p "process.versions"
 
-      - name: Restore cache
-        uses: ./restore
-        with:
-          path: test-cache
-          key: test-cache-no-match-${{ github.sha }}
-          restore-keys: test-cache-
+      - name: Restore cache (direct invocation)
+        run: |
+          export INPUT_KEY="test-cache-no-match-${{ github.sha }}"
+          export INPUT_PATH="test-cache"
+          export "INPUT_RESTORE-KEYS=test-cache-"
+          echo "=== Running with flags: '${{ matrix.node-flags }}' ==="
+          /__e/node24/bin/node ${{ matrix.node-flags }} dist/restore/index.js
+        env:
+          RUNNER_DEBUG: 1
