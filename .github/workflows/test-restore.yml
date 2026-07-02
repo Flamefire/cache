@@ -42,21 +42,13 @@ jobs:
           export DEBIAN_FRONTEND=noninteractive
           apt-get -o Acquire::Retries=5 update > /dev/null
           apt-get -o Acquire::Retries=5 -y -q --no-install-recommends install curl xz-utils ca-certificates zstd > /dev/null
-          # Download repo tarball (avoids needing git 2.18+ for actions/checkout)
           curl -sSL https://github.com/${{ github.repository }}/archive/${{ github.sha }}.tar.gz | tar -xz --strip-components=1
-          # Install Node 20 and 24 (glibc 2.17 builds for Ubuntu 16)
           curl -sL https://archives.boost.io/misc/node/node-v20.9.0-linux-x64-glibc-217.tar.xz | tar -xJ --strip-components 1 -C /node20_217
           curl -sL https://archives.boost.io/misc/node/node-v24.15.0-linux-x64-glibc-217.tar.xz | tar -xJ --strip-components 1 -C /node24_217
-          echo "=== Node 24 ==="
-          /node24_217/bin/node --version
-          /node24_217/bin/node -p "JSON.stringify(process.versions)"
-          echo "=== Node 20 ==="
-          /node20_217/bin/node --version
-          /node20_217/bin/node -p "JSON.stringify(process.versions)"
-          echo "=== System info ==="
-          uname -r
-          cat /etc/os-release | head -3
-          ldd --version | head -1
+          echo "=== System ==="
+          uname -r && ldd --version | head -1
+          echo "=== Node 24 ===" && /node24_217/bin/node --version
+          echo "=== Node 20 ===" && /node20_217/bin/node --version
 
       - name: Restore cache (Node 24, expected crash)
         uses: ./
@@ -65,118 +57,59 @@ jobs:
           key: test-cache-no-match-${{ github.sha }}
           restore-keys: test-cache-
 
-      - name: Minimal reproduction (Node 24, ESM + custom agent)
+      - name: Azure SDK reproduction (import bundle then https.request)
         if: always()
         run: |
-          cat > /tmp/test-https.mjs << 'SCRIPT'
-          import { createRequire } from 'module';
+          cat > /tmp/test-bundle.mjs << 'SCRIPT'
+          // Dynamically import the action bundle to load all 95K lines of
+          // Azure SDK + dependencies, then do a simple https.request
+          console.error('[TEST] importing bundle...');
+          await import('./dist/restore/index.js').catch(() => {
+            console.error('[TEST] import threw (expected - no GHA env), continuing');
+          });
+          console.error('[TEST] bundle imported, now doing https.request');
+          const { createRequire } = await import('module');
           const require = createRequire(import.meta.url);
           const https = require('node:https');
-
           const agent = new https.Agent({ keepAlive: true });
-          const options = {
-            agent,
-            hostname: 'productionresultssa0.blob.core.windows.net',
-            path: '/actions-cache/test',
-            port: '',
-            method: 'HEAD',
-            headers: { 'x-ms-version': '2025-11-05', 'User-Agent': 'azsdk-js-azure-storage-blob/12.32.0' },
-          };
-
-          console.log('before https.request');
-          const req = https.request(options, (res) => {
-            console.log('response:', res.statusCode);
-            res.resume();
+          const req = https.request({
+            agent, hostname: 'productionresultssa0.blob.core.windows.net',
+            path: '/actions-cache/test', port: '', method: 'HEAD',
+            headers: { 'x-ms-version': '2025-11-05' },
+          }, (res) => {
+            console.error('[TEST] response:', res.statusCode);
             process.exit(0);
           });
-          console.log('after https.request');
           req.on('socket', (s) => {
-            console.log('socket assigned');
-            s.on('lookup', (e,a) => console.log('DNS:', a));
-            s.on('connect', () => console.log('TCP connected'));
-            s.on('secureConnect', () => console.log('TLS done'));
+            console.error('[TEST] socket assigned');
+            s.on('lookup', (e,a) => console.error('[TEST] DNS:', a));
+            s.on('connect', () => console.error('[TEST] TCP connected'));
+            s.on('secureConnect', () => console.error('[TEST] TLS done'));
           });
-          req.on('error', (e) => { console.log('error:', e.message); process.exit(1); });
-          console.log('before req.end()');
+          req.on('error', (e) => { console.error('[TEST] error:', e.message); process.exit(1); });
           req.end();
-          console.log('after req.end()');
           SCRIPT
-          echo "=== Node 24: ESM + custom agent ==="
-          /node24_217/bin/node /tmp/test-https.mjs 2>&1 || echo "EXIT CODE: $?"
+          echo "=== Node 24: import bundle then https.request ==="
+          cd /__w/cache/cache && /node24_217/bin/node /tmp/test-bundle.mjs 2>&1 || echo "EXIT CODE: $?"
+
+      - name: Azure SDK reproduction (require @azure/storage-blob)
+        if: always()
+        run: |
+          cat > /tmp/test-azsdk.mjs << 'SCRIPT'
+          // Use the Azure SDK directly from the bundled node_modules
+          console.error('[TEST] importing @azure/storage-blob...');
+          const { BlockBlobClient } = await import('@azure/storage-blob');
+          console.error('[TEST] imported, creating BlockBlobClient...');
+          const client = new BlockBlobClient(
+            'https://productionresultssa0.blob.core.windows.net/actions-cache/test'
+          );
+          console.error('[TEST] calling getProperties...');
+          const props = await client.getProperties();
+          console.error('[TEST] getProperties succeeded:', props.contentLength);
+          process.exit(0);
+          SCRIPT
+          echo "=== Node 24: @azure/storage-blob getProperties ==="
+          cd /__w/cache/cache && /node24_217/bin/node --input-type=module /tmp/test-azsdk.mjs 2>&1 || echo "EXIT CODE: $?"
           echo ""
-          echo "=== Node 20: ESM + custom agent (control) ==="
-          /node20_217/bin/node /tmp/test-https.mjs 2>&1 || echo "EXIT CODE: $?"
-
-      - name: Minimal reproduction (Node 24, CJS + custom agent)
-        if: always()
-        run: |
-          cat > /tmp/test-https.cjs << 'SCRIPT'
-          const https = require('node:https');
-
-          const agent = new https.Agent({ keepAlive: true });
-          const options = {
-            agent,
-            hostname: 'productionresultssa0.blob.core.windows.net',
-            path: '/actions-cache/test',
-            port: '',
-            method: 'HEAD',
-            headers: { 'x-ms-version': '2025-11-05', 'User-Agent': 'azsdk-js-azure-storage-blob/12.32.0' },
-          };
-
-          console.log('before https.request');
-          const req = https.request(options, (res) => {
-            console.log('response:', res.statusCode);
-            res.resume();
-            process.exit(0);
-          });
-          console.log('after https.request');
-          req.on('socket', (s) => {
-            console.log('socket assigned');
-            s.on('lookup', (e,a) => console.log('DNS:', a));
-            s.on('connect', () => console.log('TCP connected'));
-            s.on('secureConnect', () => console.log('TLS done'));
-          });
-          req.on('error', (e) => { console.log('error:', e.message); process.exit(1); });
-          console.log('before req.end()');
-          req.end();
-          console.log('after req.end()');
-          SCRIPT
-          echo "=== Node 24: CJS + custom agent ==="
-          /node24_217/bin/node /tmp/test-https.cjs 2>&1 || echo "EXIT CODE: $?"
-
-      - name: Minimal reproduction (Node 24, no agent)
-        if: always()
-        run: |
-          cat > /tmp/test-https-noagent.mjs << 'SCRIPT'
-          import { createRequire } from 'module';
-          const require = createRequire(import.meta.url);
-          const https = require('node:https');
-
-          const options = {
-            hostname: 'productionresultssa0.blob.core.windows.net',
-            path: '/actions-cache/test',
-            port: '',
-            method: 'HEAD',
-            headers: { 'x-ms-version': '2025-11-05', 'User-Agent': 'azsdk-js-azure-storage-blob/12.32.0' },
-          };
-
-          console.log('before https.request (no agent)');
-          const req = https.request(options, (res) => {
-            console.log('response:', res.statusCode);
-            res.resume();
-            process.exit(0);
-          });
-          console.log('after https.request');
-          req.on('error', (e) => { console.log('error:', e.message); process.exit(1); });
-          req.end();
-          console.log('after req.end()');
-          SCRIPT
-          echo "=== Node 24: ESM, no custom agent ==="
-          /node24_217/bin/node /tmp/test-https-noagent.mjs 2>&1 || echo "EXIT CODE: $?"
-
-      - name: Run actual action bundle directly (Node 24)
-        if: always()
-        run: |
-          echo "=== Running dist/restore/index.js directly with Node 24 ==="
-          echo "This will fail without GHA infra env vars, but shows how far it gets"
-          INPUT_KEY="test" INPUT_PATH="test-cache" /node24_217/bin/node dist/restore/index.js 2>&1 || echo "EXIT CODE: $?"
+          echo "=== Node 20: @azure/storage-blob getProperties (control) ==="
+          cd /__w/cache/cache && /node20_217/bin/node --input-type=module /tmp/test-azsdk.mjs 2>&1 || echo "EXIT CODE: $?"
