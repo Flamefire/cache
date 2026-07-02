@@ -44774,45 +44774,45 @@ class NodeHttpClient {
             ...request.requestOverrides,
         };
         core_debug('makeRequest');
-        { const _fs=require('fs'); _fs.writeSync(2,'[DBG] makeRequest url='+request.url+'\n'); _fs.writeSync(2,'[DBG] makeRequest method='+request.method+'\n'); _fs.writeSync(2,'[DBG] makeRequest agent='+(options.agent?('keepAlive='+options.agent.keepAlive):'none')+'\n'); _fs.writeSync(2,'[DBG] makeRequest headers='+JSON.stringify(Object.keys(options.headers))+'\n'); try{ _fs.writeSync(2,'[DBG] makeRequest options='+JSON.stringify({hostname:options.hostname,port:options.port,method:options.method})+'\n'); }catch(e){} }
+        { external_fs_namespaceObject.writeSync(2,'[DBG] makeRequest url='+request.url+'\n'); external_fs_namespaceObject.writeSync(2,'[DBG] makeRequest method='+request.method+'\n'); external_fs_namespaceObject.writeSync(2,'[DBG] makeRequest agent='+(options.agent?('keepAlive='+options.agent.keepAlive):'none')+'\n'); external_fs_namespaceObject.writeSync(2,'[DBG] makeRequest headers='+JSON.stringify(Object.keys(options.headers))+'\n'); try{ external_fs_namespaceObject.writeSync(2,'[DBG] makeRequest options='+JSON.stringify({hostname:options.hostname,port:options.port,method:options.method})+'\n'); }catch(e){} }
         return new Promise((resolve, reject) => {
-            { const _fs=require('fs'); _fs.writeSync(2,'[DBG] before https.request\n'); }
+            external_fs_namespaceObject.writeSync(2,'[DBG] before https.request\n');
             const req = isInsecure ? external_node_http_.request(options, resolve) : external_node_https_namespaceObject.request(options, resolve);
-            { const _fs=require('fs'); _fs.writeSync(2,'[DBG] after https.request\n'); }
+            external_fs_namespaceObject.writeSync(2,'[DBG] after https.request\n');
             req.on('socket', (socket) => {
-                { const _fs=require('fs'); _fs.writeSync(2,'[DBG] socket assigned\n'); }
+                external_fs_namespaceObject.writeSync(2,'[DBG] socket assigned\n');
                 socket.on('lookup', (err, addr, family, host) => {
-                    { const _fs=require('fs'); _fs.writeSync(2,'[DBG] DNS resolved: '+addr+'\n'); }
+                    external_fs_namespaceObject.writeSync(2,'[DBG] DNS resolved: '+addr+'\n');
                 });
                 socket.on('connect', () => {
-                    { const _fs=require('fs'); _fs.writeSync(2,'[DBG] TCP connected\n'); }
+                    external_fs_namespaceObject.writeSync(2,'[DBG] TCP connected\n');
                 });
                 socket.on('secureConnect', () => {
-                    { const _fs=require('fs'); _fs.writeSync(2,'[DBG] TLS handshake done\n'); }
+                    external_fs_namespaceObject.writeSync(2,'[DBG] TLS handshake done\n');
                 });
             });
-            { const _fs=require('fs'); _fs.writeSync(2,'[DBG] after socket listener\n'); }
+            external_fs_namespaceObject.writeSync(2,'[DBG] after socket listener\n');
             req.once("error", (err) => {
-                { const _fs=require('fs'); _fs.writeSync(2,'[DBG] req error event: '+err.message+'\n'); }
+                external_fs_namespaceObject.writeSync(2,'[DBG] req error event: '+err.message+'\n');
                 reject(new restError_RestError(err.message, { code: err.code ?? restError_RestError.REQUEST_SEND_ERROR, request }));
             });
-            { const _fs=require('fs'); _fs.writeSync(2,'[DBG] after error listener\n'); }
+            external_fs_namespaceObject.writeSync(2,'[DBG] after error listener\n');
             abortController.signal.addEventListener("abort", () => {
                 const abortError = new AbortError("The operation was aborted. Rejecting from abort signal callback while making request.");
                 req.destroy(abortError);
                 reject(abortError);
             });
-            { const _fs=require('fs'); _fs.writeSync(2,'[DBG] after abort listener\n'); }
+            external_fs_namespaceObject.writeSync(2,'[DBG] after abort listener\n');
             if (body && nodeHttpClient_isReadableStream(body)) {
-                { const _fs=require('fs'); _fs.writeSync(2,'[DBG] before body.pipe(req)\n'); }
+                external_fs_namespaceObject.writeSync(2,'[DBG] before body.pipe(req)\n');
                 body.pipe(req);
-                { const _fs=require('fs'); _fs.writeSync(2,'[DBG] after body.pipe(req)\n'); }
+                external_fs_namespaceObject.writeSync(2,'[DBG] after body.pipe(req)\n');
             }
             else if (body) {
                 if (typeof body === "string" || Buffer.isBuffer(body)) {
-                    { const _fs=require('fs'); _fs.writeSync(2,'[DBG] before req.end(body)\n'); }
+                    external_fs_namespaceObject.writeSync(2,'[DBG] before req.end(body)\n');
                     req.end(body);
-                    { const _fs=require('fs'); _fs.writeSync(2,'[DBG] after req.end(body)\n'); }
+                    external_fs_namespaceObject.writeSync(2,'[DBG] after req.end(body)\n');
                 }
                 else if (isArrayBuffer(body)) {
                     req.end(ArrayBuffer.isView(body)
@@ -44825,9 +44825,9 @@ class NodeHttpClient {
                 }
             }
             else {
-                { const _fs=require('fs'); _fs.writeSync(2,'[DBG] before req.end()\n'); }
+                external_fs_namespaceObject.writeSync(2,'[DBG] before req.end()\n');
                 req.end();
-                { const _fs=require('fs'); _fs.writeSync(2,'[DBG] after req.end()\n'); }
+                external_fs_namespaceObject.writeSync(2,'[DBG] after req.end()\n');
             }
         });
     }
