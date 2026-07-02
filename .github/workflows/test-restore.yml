@@ -57,59 +57,29 @@ jobs:
           key: test-cache-no-match-${{ github.sha }}
           restore-keys: test-cache-
 
-      - name: Azure SDK reproduction (import bundle then https.request)
-        if: always()
-        run: |
-          cat > /tmp/test-bundle.mjs << 'SCRIPT'
-          // Dynamically import the action bundle to load all 95K lines of
-          // Azure SDK + dependencies, then do a simple https.request
-          console.error('[TEST] importing bundle...');
-          await import('./dist/restore/index.js').catch(() => {
-            console.error('[TEST] import threw (expected - no GHA env), continuing');
-          });
-          console.error('[TEST] bundle imported, now doing https.request');
-          const { createRequire } = await import('module');
-          const require = createRequire(import.meta.url);
-          const https = require('node:https');
-          const agent = new https.Agent({ keepAlive: true });
-          const req = https.request({
-            agent, hostname: 'productionresultssa0.blob.core.windows.net',
-            path: '/actions-cache/test', port: '', method: 'HEAD',
-            headers: { 'x-ms-version': '2025-11-05' },
-          }, (res) => {
-            console.error('[TEST] response:', res.statusCode);
-            process.exit(0);
-          });
-          req.on('socket', (s) => {
-            console.error('[TEST] socket assigned');
-            s.on('lookup', (e,a) => console.error('[TEST] DNS:', a));
-            s.on('connect', () => console.error('[TEST] TCP connected'));
-            s.on('secureConnect', () => console.error('[TEST] TLS done'));
-          });
-          req.on('error', (e) => { console.error('[TEST] error:', e.message); process.exit(1); });
-          req.end();
-          SCRIPT
-          echo "=== Node 24: import bundle then https.request ==="
-          cd /__w/cache/cache && /node24_217/bin/node /tmp/test-bundle.mjs 2>&1 || echo "EXIT CODE: $?"
-
-      - name: Azure SDK reproduction (require @azure/storage-blob)
+      - name: Azure SDK reproduction (BlockBlobClient.getProperties)
         if: always()
         run: |
           cat > /tmp/test-azsdk.mjs << 'SCRIPT'
-          // Use the Azure SDK directly from the bundled node_modules
-          console.error('[TEST] importing @azure/storage-blob...');
-          const { BlockBlobClient } = await import('@azure/storage-blob');
+          import { BlockBlobClient } from '@azure/storage-blob';
           console.error('[TEST] imported, creating BlockBlobClient...');
           const client = new BlockBlobClient(
             'https://productionresultssa0.blob.core.windows.net/actions-cache/test'
           );
           console.error('[TEST] calling getProperties...');
-          const props = await client.getProperties();
-          console.error('[TEST] getProperties succeeded:', props.contentLength);
+          try {
+            const props = await client.getProperties();
+            console.error('[TEST] getProperties succeeded:', props.contentLength);
+          } catch (e) {
+            console.error('[TEST] getProperties threw:', e.message);
+          }
           process.exit(0);
           SCRIPT
-          echo "=== Node 24: @azure/storage-blob getProperties ==="
-          cd /__w/cache/cache && /node24_217/bin/node --input-type=module /tmp/test-azsdk.mjs 2>&1 || echo "EXIT CODE: $?"
+          echo "=== Installing @azure/storage-blob ==="
+          /node24_217/bin/npm install @azure/storage-blob --prefix /tmp/azsdk-test 2>&1 | tail -3
+          cp /tmp/test-azsdk.mjs /tmp/azsdk-test/
+          echo "=== Node 24: BlockBlobClient.getProperties ==="
+          cd /tmp/azsdk-test && /node24_217/bin/node test-azsdk.mjs 2>&1 || echo "EXIT CODE: $?"
           echo ""
-          echo "=== Node 20: @azure/storage-blob getProperties (control) ==="
-          cd /__w/cache/cache && /node20_217/bin/node --input-type=module /tmp/test-azsdk.mjs 2>&1 || echo "EXIT CODE: $?"
+          echo "=== Node 20: BlockBlobClient.getProperties (control) ==="
+          cd /tmp/azsdk-test && /node20_217/bin/node test-azsdk.mjs 2>&1 || echo "EXIT CODE: $?"

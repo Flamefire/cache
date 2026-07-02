@@ -44774,49 +44774,45 @@ class NodeHttpClient {
             ...request.requestOverrides,
         };
         core_debug('makeRequest');
-        console.error('[DBG] makeRequest url=' + request.url);
-        console.error('[DBG] makeRequest method=' + request.method);
-        console.error('[DBG] makeRequest agent=' + (options.agent ? ('keepAlive=' + options.agent.keepAlive) : 'none'));
-        console.error('[DBG] makeRequest headers=' + JSON.stringify(Object.keys(options.headers)));
-        try { console.error('[DBG] makeRequest options=' + JSON.stringify({ hostname: options.hostname, path: options.path.slice(0,80), port: options.port, method: options.method })); } catch(e) { console.error('[DBG] makeRequest options err: ' + e.message); }
+        { const _fs=require('fs'); _fs.writeSync(2,'[DBG] makeRequest url='+request.url+'\n'); _fs.writeSync(2,'[DBG] makeRequest method='+request.method+'\n'); _fs.writeSync(2,'[DBG] makeRequest agent='+(options.agent?('keepAlive='+options.agent.keepAlive):'none')+'\n'); _fs.writeSync(2,'[DBG] makeRequest headers='+JSON.stringify(Object.keys(options.headers))+'\n'); try{ _fs.writeSync(2,'[DBG] makeRequest options='+JSON.stringify({hostname:options.hostname,port:options.port,method:options.method})+'\n'); }catch(e){} }
         return new Promise((resolve, reject) => {
-            console.error('[DBG] before https.request');
+            { const _fs=require('fs'); _fs.writeSync(2,'[DBG] before https.request\n'); }
             const req = isInsecure ? external_node_http_.request(options, resolve) : external_node_https_namespaceObject.request(options, resolve);
-            console.error('[DBG] after https.request');
+            { const _fs=require('fs'); _fs.writeSync(2,'[DBG] after https.request\n'); }
             req.on('socket', (socket) => {
-                console.error('[DBG] socket assigned');
+                { const _fs=require('fs'); _fs.writeSync(2,'[DBG] socket assigned\n'); }
                 socket.on('lookup', (err, addr, family, host) => {
-                    console.error('[DBG] DNS resolved: ' + addr);
+                    { const _fs=require('fs'); _fs.writeSync(2,'[DBG] DNS resolved: '+addr+'\n'); }
                 });
                 socket.on('connect', () => {
-                    console.error('[DBG] TCP connected');
+                    { const _fs=require('fs'); _fs.writeSync(2,'[DBG] TCP connected\n'); }
                 });
                 socket.on('secureConnect', () => {
-                    console.error('[DBG] TLS handshake done');
+                    { const _fs=require('fs'); _fs.writeSync(2,'[DBG] TLS handshake done\n'); }
                 });
             });
-            console.error('[DBG] after socket listener');
+            { const _fs=require('fs'); _fs.writeSync(2,'[DBG] after socket listener\n'); }
             req.once("error", (err) => {
-                console.error('[DBG] req error event: ' + err.message);
+                { const _fs=require('fs'); _fs.writeSync(2,'[DBG] req error event: '+err.message+'\n'); }
                 reject(new restError_RestError(err.message, { code: err.code ?? restError_RestError.REQUEST_SEND_ERROR, request }));
             });
-            console.error('[DBG] after error listener');
+            { const _fs=require('fs'); _fs.writeSync(2,'[DBG] after error listener\n'); }
             abortController.signal.addEventListener("abort", () => {
                 const abortError = new AbortError("The operation was aborted. Rejecting from abort signal callback while making request.");
                 req.destroy(abortError);
                 reject(abortError);
             });
-            console.error('[DBG] after abort listener');
+            { const _fs=require('fs'); _fs.writeSync(2,'[DBG] after abort listener\n'); }
             if (body && nodeHttpClient_isReadableStream(body)) {
-                console.error('[DBG] before body.pipe(req)');
+                { const _fs=require('fs'); _fs.writeSync(2,'[DBG] before body.pipe(req)\n'); }
                 body.pipe(req);
-                console.error('[DBG] after body.pipe(req)');
+                { const _fs=require('fs'); _fs.writeSync(2,'[DBG] after body.pipe(req)\n'); }
             }
             else if (body) {
                 if (typeof body === "string" || Buffer.isBuffer(body)) {
-                    console.error('[DBG] before req.end(body)');
+                    { const _fs=require('fs'); _fs.writeSync(2,'[DBG] before req.end(body)\n'); }
                     req.end(body);
-                    console.error('[DBG] after req.end(body)');
+                    { const _fs=require('fs'); _fs.writeSync(2,'[DBG] after req.end(body)\n'); }
                 }
                 else if (isArrayBuffer(body)) {
                     req.end(ArrayBuffer.isView(body)
@@ -44829,9 +44825,9 @@ class NodeHttpClient {
                 }
             }
             else {
-                console.error('[DBG] before req.end()');
+                { const _fs=require('fs'); _fs.writeSync(2,'[DBG] before req.end()\n'); }
                 req.end();
-                console.error('[DBG] after req.end()');
+                { const _fs=require('fs'); _fs.writeSync(2,'[DBG] after req.end()\n'); }
             }
         });
     }
