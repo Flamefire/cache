@@ -20,7 +20,7 @@ jobs:
           mkdir -p test-cache
           echo "test content" > test-cache/file.txt
 
-      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+      - uses: actions/cache/save@v6
         with:
           path: test-cache
           key: test-cache-${{ github.sha }}
