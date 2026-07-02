@@ -13,21 +13,7 @@ env:
   ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
 jobs:
-  save:
-    runs-on: ubuntu-latest
-    steps:
-      - run: |
-          mkdir -p test-cache
-          echo "test content" > test-cache/file.txt
-
-      - uses: actions/cache@v6
-        with:
-          path: test-cache
-          key: test-cache-${{ github.sha }}
-          restore-keys: test-cache-
-
   restore:
-    needs: save
     runs-on: ubuntu-latest
     container:
       image: ubuntu:16.04
@@ -57,7 +43,7 @@ jobs:
         run: |
           export INPUT_KEY="test-cache-no-match-${{ github.sha }}"
           export INPUT_PATH="test-cache"
-          export "INPUT_RESTORE-KEYS=test-cache-"
+          export "INPUT_RESTOREKEYS=test-cache-"
           echo "=== Running with flags: '${{ matrix.node-flags }}' ==="
           /__e/node24/bin/node ${{ matrix.node-flags }} dist/restore/index.js
         env:
