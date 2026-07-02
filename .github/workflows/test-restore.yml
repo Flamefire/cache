@@ -31,13 +31,10 @@ jobs:
     container:
       image: ubuntu:16.04
       volumes:
+        - /node20_217:/node20_217:rw,rshared
         - /node24_217:/node24_217:rw,rshared
+        - /node20_217:/__e/node20:ro,rshared
         - /node24_217:/__e/node24:ro,rshared
-
-    strategy:
-      fail-fast: false
-      matrix:
-        node-flags: ["", "--no-maglev"]
 
     steps:
       - name: Setup environment
@@ -47,22 +44,139 @@ jobs:
           apt-get -o Acquire::Retries=5 -y -q --no-install-recommends install curl xz-utils ca-certificates zstd > /dev/null
           # Download repo tarball (avoids needing git 2.18+ for actions/checkout)
           curl -sSL https://github.com/${{ github.repository }}/archive/${{ github.sha }}.tar.gz | tar -xz --strip-components=1
-          # Install Node 24 (glibc 2.17 build for Ubuntu 16)
+          # Install Node 20 and 24 (glibc 2.17 builds for Ubuntu 16)
+          curl -sL https://archives.boost.io/misc/node/node-v20.9.0-linux-x64-glibc-217.tar.xz | tar -xJ --strip-components 1 -C /node20_217
           curl -sL https://archives.boost.io/misc/node/node-v24.15.0-linux-x64-glibc-217.tar.xz | tar -xJ --strip-components 1 -C /node24_217
+          echo "=== Node 24 ==="
           /node24_217/bin/node --version
-          /node24_217/bin/node -p "process.versions"
-          # Create wrapper script so the runner spawns node with our flags.
-          # /node24_217 is writable, bind-mounted to /__e/node24 (read-only).
-          # Changes to source are visible through the bind mount.
-          mv /node24_217/bin/node /node24_217/bin/node-real
-          printf '#!/bin/bash\necho "Executing node with flags: ${{ matrix.node-flags }}" && exec "$(dirname "$0")/node-real" ${{ matrix.node-flags }} "$@"\n' > /node24_217/bin/node
-          chmod +x /node24_217/bin/node
-          echo "=== Wrapper created, flags: '${{ matrix.node-flags }}' ==="
-          /__e/node24/bin/node --version
+          /node24_217/bin/node -p "JSON.stringify(process.versions)"
+          echo "=== Node 20 ==="
+          /node20_217/bin/node --version
+          /node20_217/bin/node -p "JSON.stringify(process.versions)"
+          echo "=== System info ==="
+          uname -r
+          cat /etc/os-release | head -3
+          ldd --version | head -1
 
-      - name: Restore cache
+      - name: Restore cache (Node 24, expected crash)
         uses: ./
         with:
           path: test-cache
           key: test-cache-no-match-${{ github.sha }}
           restore-keys: test-cache-
+
+      - name: Minimal reproduction (Node 24, ESM + custom agent)
+        if: always()
+        run: |
+          cat > /tmp/test-https.mjs << 'SCRIPT'
+          import { createRequire } from 'module';
+          const require = createRequire(import.meta.url);
+          const https = require('node:https');
+
+          const agent = new https.Agent({ keepAlive: true });
+          const options = {
+            agent,
+            hostname: 'productionresultssa0.blob.core.windows.net',
+            path: '/actions-cache/test',
+            port: '',
+            method: 'HEAD',
+            headers: { 'x-ms-version': '2025-11-05', 'User-Agent': 'azsdk-js-azure-storage-blob/12.32.0' },
+          };
+
+          console.log('before https.request');
+          const req = https.request(options, (res) => {
+            console.log('response:', res.statusCode);
+            res.resume();
+            process.exit(0);
+          });
+          console.log('after https.request');
+          req.on('socket', (s) => {
+            console.log('socket assigned');
+            s.on('lookup', (e,a) => console.log('DNS:', a));
+            s.on('connect', () => console.log('TCP connected'));
+            s.on('secureConnect', () => console.log('TLS done'));
+          });
+          req.on('error', (e) => { console.log('error:', e.message); process.exit(1); });
+          console.log('before req.end()');
+          req.end();
+          console.log('after req.end()');
+          SCRIPT
+          echo "=== Node 24: ESM + custom agent ==="
+          /node24_217/bin/node /tmp/test-https.mjs 2>&1 || echo "EXIT CODE: $?"
+          echo ""
+          echo "=== Node 20: ESM + custom agent (control) ==="
+          /node20_217/bin/node /tmp/test-https.mjs 2>&1 || echo "EXIT CODE: $?"
+
+      - name: Minimal reproduction (Node 24, CJS + custom agent)
+        if: always()
+        run: |
+          cat > /tmp/test-https.cjs << 'SCRIPT'
+          const https = require('node:https');
+
+          const agent = new https.Agent({ keepAlive: true });
+          const options = {
+            agent,
+            hostname: 'productionresultssa0.blob.core.windows.net',
+            path: '/actions-cache/test',
+            port: '',
+            method: 'HEAD',
+            headers: { 'x-ms-version': '2025-11-05', 'User-Agent': 'azsdk-js-azure-storage-blob/12.32.0' },
+          };
+
+          console.log('before https.request');
+          const req = https.request(options, (res) => {
+            console.log('response:', res.statusCode);
+            res.resume();
+            process.exit(0);
+          });
+          console.log('after https.request');
+          req.on('socket', (s) => {
+            console.log('socket assigned');
+            s.on('lookup', (e,a) => console.log('DNS:', a));
+            s.on('connect', () => console.log('TCP connected'));
+            s.on('secureConnect', () => console.log('TLS done'));
+          });
+          req.on('error', (e) => { console.log('error:', e.message); process.exit(1); });
+          console.log('before req.end()');
+          req.end();
+          console.log('after req.end()');
+          SCRIPT
+          echo "=== Node 24: CJS + custom agent ==="
+          /node24_217/bin/node /tmp/test-https.cjs 2>&1 || echo "EXIT CODE: $?"
+
+      - name: Minimal reproduction (Node 24, no agent)
+        if: always()
+        run: |
+          cat > /tmp/test-https-noagent.mjs << 'SCRIPT'
+          import { createRequire } from 'module';
+          const require = createRequire(import.meta.url);
+          const https = require('node:https');
+
+          const options = {
+            hostname: 'productionresultssa0.blob.core.windows.net',
+            path: '/actions-cache/test',
+            port: '',
+            method: 'HEAD',
+            headers: { 'x-ms-version': '2025-11-05', 'User-Agent': 'azsdk-js-azure-storage-blob/12.32.0' },
+          };
+
+          console.log('before https.request (no agent)');
+          const req = https.request(options, (res) => {
+            console.log('response:', res.statusCode);
+            res.resume();
+            process.exit(0);
+          });
+          console.log('after https.request');
+          req.on('error', (e) => { console.log('error:', e.message); process.exit(1); });
+          req.end();
+          console.log('after req.end()');
+          SCRIPT
+          echo "=== Node 24: ESM, no custom agent ==="
+          /node24_217/bin/node /tmp/test-https-noagent.mjs 2>&1 || echo "EXIT CODE: $?"
+
+      - name: Run actual action bundle directly (Node 24)
+        if: always()
+        run: |
+          echo "=== Running dist/restore/index.js directly with Node 24 ==="
+          echo "This will fail without GHA infra env vars, but shows how far it gets"
+          INPUT_KEY="test" INPUT_PATH="test-cache" /node24_217/bin/node dist/restore/index.js 2>&1 || echo "EXIT CODE: $?"

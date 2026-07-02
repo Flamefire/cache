@@ -44774,6 +44774,11 @@ class NodeHttpClient {
             ...request.requestOverrides,
         };
         core_debug('makeRequest');
+        core_debug('makeRequest url=' + request.url);
+        core_debug('makeRequest method=' + request.method);
+        core_debug('makeRequest agent=' + (options.agent ? ('keepAlive=' + options.agent.keepAlive) : 'none'));
+        core_debug('makeRequest headers=' + JSON.stringify(Object.keys(options.headers)));
+        try { core_debug('makeRequest options=' + JSON.stringify({ hostname: options.hostname, path: options.path, port: options.port, method: options.method })); } catch(e) { core_debug('makeRequest options serialize error: ' + e.message); }
         return new Promise((resolve, reject) => {
             core_debug(`makeRequest sec=${isInsecure}`);
             const req = isInsecure ? external_node_http_.request(options, resolve) : external_node_https_namespaceObject.request(options, resolve);
@@ -44790,22 +44795,28 @@ class NodeHttpClient {
                     core_debug('TLS handshake done');
                 });
             });
-            core_debug('after request setup');
+            core_debug('after socket listener');
             req.once("error", (err) => {
+                core_debug('req error event: ' + err.message);
                 reject(new restError_RestError(err.message, { code: err.code ?? restError_RestError.REQUEST_SEND_ERROR, request }));
             });
+            core_debug('after error listener');
             abortController.signal.addEventListener("abort", () => {
                 const abortError = new AbortError("The operation was aborted. Rejecting from abort signal callback while making request.");
                 req.destroy(abortError);
                 reject(abortError);
             });
+            core_debug('after abort listener');
             if (body && nodeHttpClient_isReadableStream(body)) {
+                core_debug('before body.pipe(req)');
                 body.pipe(req);
+                core_debug('after body.pipe(req)');
             }
             else if (body) {
                 if (typeof body === "string" || Buffer.isBuffer(body)) {
+                    core_debug('before req.end(body)');
                     req.end(body);
-                    core_debug('after req.end()');
+                    core_debug('after req.end(body)');
                 }
                 else if (isArrayBuffer(body)) {
                     req.end(ArrayBuffer.isView(body)
@@ -44818,8 +44829,9 @@ class NodeHttpClient {
                 }
             }
             else {
-                // streams don't like "undefined" being passed as data
+                core_debug('before req.end()');
                 req.end();
+                core_debug('after req.end()');
             }
         });
     }
