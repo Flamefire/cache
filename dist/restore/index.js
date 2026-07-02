@@ -44805,6 +44805,7 @@ class NodeHttpClient {
             else if (body) {
                 if (typeof body === "string" || Buffer.isBuffer(body)) {
                     req.end(body);
+                    core_debug('after req.end()');
                 }
                 else if (isArrayBuffer(body)) {
                     req.end(ArrayBuffer.isView(body)
