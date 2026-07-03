@@ -24,35 +24,15 @@ jobs:
 
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - pkg: ""
-          - pkg: gdb
-          - pkg: libc-bin
-          - pkg: libc6
-          - pkg: libstdc++6
-          - pkg: libc-bin libc6
     steps:
       - name: Setup environment
         run: |
           export DEBIAN_FRONTEND=noninteractive
           apt-get -o Acquire::Retries=5 update > /dev/null
           apt-get -o Acquire::Retries=5 -y -q --no-install-recommends install curl xz-utils ca-certificates zstd software-properties-common > /dev/null
-          # Add Ubuntu 20.04 (focal) repos
-          add-apt-repository -y "deb http://archive.ubuntu.com/ubuntu focal main"
-          apt-get -o Acquire::Retries=5 update > /dev/null
-          [[ -z "${{matrix.pkg}}" ]] || apt-get -o Acquire::Retries=5 -y -q --no-install-recommends install ${{matrix.pkg}}
-          echo "=== GDB version ===" && gdb --version | head -1
           curl -sSL https://github.com/${{ github.repository }}/archive/${{ github.sha }}.tar.gz | tar -xz --strip-components=1
           curl -sL https://archives.boost.io/misc/node/node-v24.15.0-linux-x64-glibc-217.tar.xz | tar -xJ --strip-components 1 -C /node24_217
-          echo "=== System ===" && uname -r && ldd --version | head -1
-          echo "=== Node 24 ===" && /node24_217/bin/node --version
-          cat /etc/nsswitch.conf
-          sed '/^hosts:/d' /etc/nsswitch.conf > /tmp/nsswitch.conf
-          echo 'hosts: dns files' >> /tmp/nsswitch.conf
-          cat /tmp/nsswitch.conf > /etc/nsswitch.conf
-          sed '/::/d' /etc/hosts > /tmp/hosts
-          cat /tmp/hosts > /etc/hosts
+          curl -sL https://archives.boost.io/misc/node/node-v20.9.0-linux-x64-glibc-217.tar.xz | tar -xJ --strip-components 1 -C /node24_217
 
       - name: Restore cache
         uses: ./
