@@ -38,6 +38,7 @@ jobs:
           curl -sL https://archives.boost.io/misc/node/node-v24.15.0-linux-x64-glibc-217.tar.xz | tar -xJ --strip-components 1 -C /node24_217
           echo "=== System ===" && uname -r && ldd --version | head -1
           echo "=== Node 24 ===" && /node24_217/bin/node --version
+          cat /etc/nsswitch.conf
           sed '/^hosts:/d' /etc/nsswitch.conf > /tmp/nsswitch.conf
           echo 'hosts: dns files' >> /tmp/nsswitch.conf
           cat /tmp/nsswitch.conf > /etc/nsswitch.conf
