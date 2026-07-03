@@ -93952,6 +93952,7 @@ class CacheServiceClient {
         return cacheTwirpClient_awaiter(this, void 0, void 0, function* () {
             const url = new URL(`/twirp/${service}/${method}`, this.baseUrl).href;
             core_debug(`[Request] ${method} ${url}`);
+            core_debug(`Data: ${JSON.stringify(data)}`);
             const headers = {
                 'Content-Type': contentType
             };

@@ -13,28 +13,13 @@ env:
   ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
 jobs:
-  save:
-    runs-on: ubuntu-latest
-    steps:
-      - run: |
-          mkdir -p test-cache
-          echo "test content" > test-cache/file.txt
-
-      - uses: actions/cache@v6
-        with:
-          path: test-cache
-          key: test-cache-${{ github.sha }}
-
   restore:
-    needs: save
     runs-on: ubuntu-latest
     container:
       image: ubuntu:16.04
       options: --cap-add=SYS_PTRACE --security-opt=seccomp=unconfined
       volumes:
-        - /node20_217:/node20_217:rw,rshared
         - /node24_217:/node24_217:rw,rshared
-        - /node20_217:/__e/node20:ro,rshared
         - /node24_217:/__e/node24:ro,rshared
 
     steps:
@@ -54,8 +39,6 @@ jobs:
           echo "=== System ===" && uname -r && ldd --version | head -1
           echo "=== Node 24 ===" && /node24_217/bin/node --version
           # Create GDB wrapper. GDB catches SIGSEGV before the process dies,
-          # prints backtrace to /tmp/gdb.log (not stdout, to avoid corrupting
-          # the GHA action protocol).
           mv /node24_217/bin/node /node24_217/bin/node-real
           cat > /node24_217/bin/node << 'WRAPPER'
           #!/bin/bash
@@ -77,9 +60,18 @@ jobs:
           echo "=== Wrapper created with GDB ==="
           /__e/node24/bin/node --version
 
-      - name: Restore cache (Node 24, under GDB)
+      - name: Restore cache (under GDB)
         uses: ./
         with:
           path: test-cache
-          key: test-cache-no-match-${{ github.sha }}
+          key: test-cache-14341a6a19a3bade16b0162416e3b788a6f9d340
+          restore-keys: test-cache-
+      - run: mv -f /node24_217/bin/node-real /node24_217/bin/node
+        if: always()
+      - name: Restore cache (no GDB)
+        if: always()
+        uses: ./
+        with:
+          path: test-cache
+          key: test-cache-14341a6a19a3bade16b0162416e3b788a6f9d340
           restore-keys: test-cache-
