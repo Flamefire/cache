@@ -32,6 +32,11 @@ jobs:
           curl -sL https://archives.boost.io/misc/node/node-v24.15.0-linux-x64-glibc-217.tar.xz | tar -xJ --strip-components 1 -C /node24_217
           echo "=== System ===" && uname -r && ldd --version | head -1
           echo "=== Node 24 ===" && /node24_217/bin/node --version
+          echo "Fixing /etc hosts:"
+          cat /etc/hosts
+          echo "NEW:"
+          sed '/::'/d /etc/hosts | tee /tmp/hosts.new
+          cat /tmp/hosts.new > /etc/hosts
       - name: Restore cache (no GDB)
         uses: ./
         with:
