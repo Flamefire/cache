@@ -38,14 +38,9 @@ jobs:
           curl -sL https://archives.boost.io/misc/node/node-v24.15.0-linux-x64-glibc-217.tar.xz | tar -xJ --strip-components 1 -C /node24_217
           echo "=== System ===" && uname -r && ldd --version | head -1
           echo "=== Node 24 ===" && /node24_217/bin/node --version
-          mv /node24_217/bin/node /node24_217/bin/node-real
-          cat > /node24_217/bin/node << 'WRAPPER'
-          #!/bin/bash
-          exec "$(dirname "$0")/node-real" --dns-result-order=ipv4first "$@"
-          WRAPPER
-          chmod +x /node24_217/bin/node
-          echo "=== Wrapper created with GDB ==="
-          /__e/node24/bin/node --version
+          sed '/^hosts:/d' /etc/nsswitch.conf > /tmp/nsswitch.conf
+          echo 'hosts: dns files' >> /tmp/nsswitch.conf
+          cat /tmp/nsswitch.conf > /etc/nsswitch.conf
 
       - name: Restore cache (under GDB)
         uses: ./
