@@ -50,6 +50,13 @@ jobs:
           echo "/node24_217/bin" >> "$GITHUB_PATH"
           echo "=== Node 24 ===" && /node24_217/bin/node --version
           echo "=== Node 20 ===" && /node20_217/bin/node --version
+          # Create wrapper to enable Node's fatal error diagnostic report
+          # --report-on-fatalerror generates a JSON report with stack trace on SIGSEGV
+          mv /node24_217/bin/node /node24_217/bin/node-real
+          printf '#!/bin/bash\nset -x;exec "$(dirname "$0")/node-real" --report-on-fatalerror --report-directory=/tmp "$@"\n' > /node24_217/bin/node
+          chmod +x /node24_217/bin/node
+          echo "=== Wrapper created with --report-on-fatalerror ==="
+          /__e/node24/bin/node --version
 
       - name: Restore cache (Node 24, expected crash)
         uses: ./
@@ -58,29 +65,12 @@ jobs:
           key: test-cache-no-match-${{ github.sha }}
           restore-keys: test-cache-
 
-      - name: Azure SDK reproduction (BlockBlobClient.getProperties)
+      - name: Collect diagnostic report
         if: always()
         run: |
-          cat > /tmp/test-azsdk.mjs << 'SCRIPT'
-          import { BlockBlobClient } from '@azure/storage-blob';
-          console.error('[TEST] imported, creating BlockBlobClient...');
-          const client = new BlockBlobClient(
-            'https://productionresultssa0.blob.core.windows.net/actions-cache/test'
-          );
-          console.error('[TEST] calling getProperties...');
-          try {
-            const props = await client.getProperties();
-            console.error('[TEST] getProperties succeeded:', props.contentLength);
-          } catch (e) {
-            console.error('[TEST] getProperties threw:', e.message);
-          }
-          process.exit(0);
-          SCRIPT
-          echo "=== Installing @azure/storage-blob ==="
-          /node24_217/bin/npm install @azure/storage-blob --prefix /tmp/azsdk-test 2>&1 | tail -3
-          cp /tmp/test-azsdk.mjs /tmp/azsdk-test/
-          echo "=== Node 24: BlockBlobClient.getProperties ==="
-          cd /tmp/azsdk-test && /node24_217/bin/node test-azsdk.mjs 2>&1 || echo "EXIT CODE: $?"
-          echo ""
-          echo "=== Node 20: BlockBlobClient.getProperties (control) ==="
-          cd /tmp/azsdk-test && /node20_217/bin/node test-azsdk.mjs 2>&1 || echo "EXIT CODE: $?"
+          echo "=== Looking for diagnostic reports ==="
+          ls -la /tmp/report.*.json 2>/dev/null || echo "No report files found"
+          for f in /tmp/report.*.json; do
+            echo "=== Report: $f ==="
+            cat "$f" 2>/dev/null || true
+          done
