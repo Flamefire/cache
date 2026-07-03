@@ -13,20 +13,7 @@ env:
   ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
 jobs:
-  save:
-    runs-on: ubuntu-latest
-    steps:
-      - run: |
-          mkdir -p test-cache
-          echo "test content" > test-cache/file.txt
-
-      - uses: actions/cache@v6
-        with:
-          path: test-cache
-          key: test-cache-${{ github.sha }}
-
   restore:
-    needs: save
     runs-on: ubuntu-latest
     container:
       image: ubuntu:16.04
