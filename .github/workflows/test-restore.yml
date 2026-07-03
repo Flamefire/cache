@@ -13,7 +13,20 @@ env:
   ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
 jobs:
+  save:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          mkdir -p test-cache
+          echo "test content" > test-cache/file.txt
+
+      - uses: actions/cache@v6
+        with:
+          path: test-cache
+          key: test-cache-${{ github.sha }}
+
   restore:
+    needs: save
     runs-on: ubuntu-latest
     container:
       image: ubuntu:16.04
@@ -28,22 +41,35 @@ jobs:
         run: |
           export DEBIAN_FRONTEND=noninteractive
           apt-get -o Acquire::Retries=5 update > /dev/null
-          apt-get -o Acquire::Retries=5 -y -q --no-install-recommends install curl xz-utils ca-certificates zstd > /dev/null
+          apt-get -o Acquire::Retries=5 -y -q --no-install-recommends install curl xz-utils ca-certificates zstd gdb > /dev/null
           curl -sSL https://github.com/${{ github.repository }}/archive/${{ github.sha }}.tar.gz | tar -xz --strip-components=1
           curl -sL https://archives.boost.io/misc/node/node-v20.9.0-linux-x64-glibc-217.tar.xz | tar -xJ --strip-components 1 -C /node20_217
           curl -sL https://archives.boost.io/misc/node/node-v24.15.0-linux-x64-glibc-217.tar.xz | tar -xJ --strip-components 1 -C /node24_217
           echo "=== System ==="
           uname -r && ldd --version | head -1
-          echo "/node24_217/bin" >> "$GITHUB_PATH"
           echo "=== Node 24 ===" && /node24_217/bin/node --version
           echo "=== Node 20 ===" && /node20_217/bin/node --version
-          # Create wrapper to enable Node's fatal error diagnostic report
-          # --report-on-fatalerror generates a JSON report with stack trace on SIGSEGV
+          # Find libSegFault.so for backtrace on SIGSEGV
+          echo "=== libSegFault ==="
+          find / -name 'libSegFault.so' 2>/dev/null || echo "not found"
+          # Create wrapper that uses libSegFault.so to catch SIGSEGV and print backtrace
+          # libSegFault installs a SIGSEGV handler with SA_ONSTACK + sigaltstack,
+          # so it works even when the crashing thread's stack is corrupted.
+          # This is essential because the crash happens in a background thread
+          # (libuv thread pool, likely DNS resolution) and --report-on-fatalerror
+          # doesn't generate a report (process killed too fast).
           mv /node24_217/bin/node /node24_217/bin/node-real
-          printf '#!/bin/bash\nset -x;exec "$(dirname "$0")/node-real" --report-on-fatalerror --report-directory=/tmp "$@"\n' > /node24_217/bin/node
+          SEGFAULT_LIB=$(find / -name 'libSegFault.so' 2>/dev/null | head -1)
+          if [ -n "$SEGFAULT_LIB" ]; then
+            printf '#!/bin/bash\nulimit -c unlimited\nexport LD_PRELOAD="%s"\nexport SEGFAULT_SIGNALS="all"\nexport SEGFAULT_OUTPUT_NAME="/tmp/segfault.log"\nexec "$(dirname "$0")/node-real" "$@"\n' "$SEGFAULT_LIB" > /node24_217/bin/node
+          else
+            printf '#!/bin/bash\nulimit -c unlimited\nexec "$(dirname "$0")/node-real" "$@"\n' > /node24_217/bin/node
+          fi
           chmod +x /node24_217/bin/node
-          echo "=== Wrapper created with --report-on-fatalerror ==="
+          echo "=== Wrapper created ==="
           /__e/node24/bin/node --version
+          echo "=== Checking core pattern ==="
+          cat /proc/sys/kernel/core_pattern 2>/dev/null || echo "cannot read core_pattern"
 
       - name: Restore cache (Node 24, expected crash)
         uses: ./
@@ -52,12 +78,22 @@ jobs:
           key: test-cache-no-match-${{ github.sha }}
           restore-keys: test-cache-
 
-      - name: Collect diagnostic report
+      - name: Collect crash diagnostics
         if: always()
         run: |
-          echo "=== Looking for diagnostic reports ==="
-          ls -la /tmp/report.*.json 2>/dev/null || echo "No report files found"
-          for f in /tmp/report.*.json; do
-            echo "=== Report: $f ==="
-            cat "$f" 2>/dev/null || true
-          done
+          echo "=== Segfault log ==="
+          cat /tmp/segfault.log 2>/dev/null || echo "No segfault log found"
+          echo ""
+          echo "=== Core dumps ==="
+          ls -la /tmp/core* 2>/dev/null || echo "No core files in /tmp"
+          ls -la core* 2>/dev/null || echo "No core files in cwd"
+          find / -name 'core.*' -o -name 'core' 2>/dev/null | head -5 || echo "No core dumps found"
+          echo ""
+          echo "=== GDB analysis (if core found) ==="
+          COREFILE=$(find / -maxdepth 3 -name 'core*' -type f 2>/dev/null | head -1)
+          if [ -n "$COREFILE" ]; then
+            echo "Analyzing $COREFILE"
+            gdb -batch -ex "bt" -ex "thread apply all bt" /node24_217/bin/node-real "$COREFILE" 2>&1 || true
+          else
+            echo "No core dump to analyze"
+          fi
