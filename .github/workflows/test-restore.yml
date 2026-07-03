@@ -28,48 +28,11 @@ jobs:
           export DEBIAN_FRONTEND=noninteractive
           apt-get -o Acquire::Retries=5 update > /dev/null
           apt-get -o Acquire::Retries=5 -y -q --no-install-recommends install curl xz-utils ca-certificates zstd software-properties-common > /dev/null
-          # Install GDB 9+ from Ubuntu 20.04 (focal) — Ubuntu 16.04's GDB 7.11
-          # doesn't support DWARF 5 which Node 24's binary uses.
-          add-apt-repository -y "deb http://archive.ubuntu.com/ubuntu focal main"
-          apt-get -o Acquire::Retries=5 update > /dev/null
-          apt-get -o Acquire::Retries=5 -y -q --no-install-recommends install gdb > /dev/null
-          echo "=== GDB version ===" && gdb --version | head -1
           curl -sSL https://github.com/${{ github.repository }}/archive/${{ github.sha }}.tar.gz | tar -xz --strip-components=1
           curl -sL https://archives.boost.io/misc/node/node-v24.15.0-linux-x64-glibc-217.tar.xz | tar -xJ --strip-components 1 -C /node24_217
           echo "=== System ===" && uname -r && ldd --version | head -1
           echo "=== Node 24 ===" && /node24_217/bin/node --version
-          # Create GDB wrapper. GDB catches SIGSEGV before the process dies,
-          mv /node24_217/bin/node /node24_217/bin/node-real
-          cat > /node24_217/bin/node << 'WRAPPER'
-          #!/bin/bash
-          exec gdb -batch \
-            -ex "set pagination off" \
-            -ex "handle SIGSEGV stop nopass" \
-            -ex "run" \
-            -ex "echo === BACKTRACE (crashing thread) ===\n" \
-            -ex "bt" \
-            -ex "echo === ALL THREADS ===\n" \
-            -ex "thread apply all bt full" \
-            -ex "echo === INFO REGISTERS ===\n" \
-            -ex "info registers" \
-            -ex "echo === INFO SHARED LIBRARIES ===\n" \
-            -ex "info sharedlibrary" \
-            --args "$(dirname "$0")/node-real" "$@" 2>&1
-          WRAPPER
-          chmod +x /node24_217/bin/node
-          echo "=== Wrapper created with GDB ==="
-          /__e/node24/bin/node --version
-
-      - name: Restore cache (under GDB)
-        uses: ./
-        with:
-          path: test-cache
-          key: test-cache-14341a6a19a3bade16b0162416e3b788a6f9d340
-          restore-keys: test-cache-
-      - run: mv -f /node24_217/bin/node-real /node24_217/bin/node
-        if: always()
       - name: Restore cache (no GDB)
-        if: always()
         uses: ./
         with:
           path: test-cache
