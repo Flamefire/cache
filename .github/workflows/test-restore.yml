@@ -42,39 +42,40 @@ jobs:
         run: |
           export DEBIAN_FRONTEND=noninteractive
           apt-get -o Acquire::Retries=5 update > /dev/null
-          apt-get -o Acquire::Retries=5 -y -q --no-install-recommends install curl xz-utils ca-certificates zstd strace gdb > /dev/null
+          apt-get -o Acquire::Retries=5 -y -q --no-install-recommends install curl xz-utils ca-certificates zstd gdb > /dev/null
           curl -sSL https://github.com/${{ github.repository }}/archive/${{ github.sha }}.tar.gz | tar -xz --strip-components=1
           curl -sL https://archives.boost.io/misc/node/node-v24.15.0-linux-x64-glibc-217.tar.xz | tar -xJ --strip-components 1 -C /node24_217
           echo "=== System ==="
           uname -r && ldd --version | head -1
           echo "=== Node 24 ===" && /node24_217/bin/node --version
-          # Create wrapper that runs node under strace to capture syscalls
-          # strace -f traces all threads (including libuv thread pool)
-          # The crash happens in a background thread, so -f is essential
+          # Create wrapper that runs node under GDB to catch the SIGSEGV
+          # and print a backtrace from the crashing thread.
+          # GDB catches the signal before the process dies, so we get
+          # the full native stack trace of the crash.
           mv /node24_217/bin/node /node24_217/bin/node-real
-          printf '#!/bin/bash\nexec strace -f -o /tmp/strace.log "$(dirname "$0")/node-real" "$@"\n' > /node24_217/bin/node
+          cat > /node24_217/bin/node << 'WRAPPER'
+          #!/bin/bash
+          exec gdb -batch \
+            -ex "set pagination off" \
+            -ex "handle SIGSEGV stop nopass" \
+            -ex "run" \
+            -ex "echo === BACKTRACE (crashing thread) ===\n" \
+            -ex "bt" \
+            -ex "echo === ALL THREADS ===\n" \
+            -ex "thread apply all bt full" \
+            -ex "echo === INFO REGISTERS ===\n" \
+            -ex "info registers" \
+            -ex "echo === INFO SHARED LIBRARIES ===\n" \
+            -ex "info sharedlibrary" \
+            --args "$(dirname "$0")/node-real" "$@" 2>&1
+          WRAPPER
           chmod +x /node24_217/bin/node
-          echo "=== Wrapper created with strace ==="
+          echo "=== Wrapper created with GDB ==="
           /__e/node24/bin/node --version
 
-      - name: Restore cache (Node 24, under strace)
+      - name: Restore cache (Node 24, under GDB)
         uses: ./
         with:
           path: test-cache
           key: test-cache-no-match-${{ github.sha }}
           restore-keys: test-cache-
-
-      - name: Collect strace output
-        if: always()
-        run: |
-          echo "=== Strace log size ==="
-          wc -l /tmp/strace.log 2>/dev/null || echo "No strace log"
-          echo ""
-          echo "=== Last 200 lines of strace (crash point) ==="
-          tail -200 /tmp/strace.log 2>/dev/null || echo "Cannot read strace log"
-          echo ""
-          echo "=== Signals in strace ==="
-          grep -i 'SIGSEGV\|SIGABRT\|SIGBUS\|SIGILL\|--- Signal\|killed by' /tmp/strace.log 2>/dev/null || echo "No signals found in strace"
-          echo ""
-          echo "=== getaddrinfo/dns related ==="
-          grep -i 'getaddrinfo\|recvfrom\|sendto.*53\|connect.*53' /tmp/strace.log 2>/dev/null | tail -20 || echo "No DNS syscalls found"
